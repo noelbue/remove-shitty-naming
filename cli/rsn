@@ -1,0 +1,172 @@
+#!/bin/zsh
+# rsn — remove shitty naming
+# Renames files and folders to clean, lowercase snake_case names.
+# https://github.com/noelbue/remove-shitty-naming
+
+emulate -R zsh
+setopt extendedglob nullglob
+export LC_ALL=en_US.UTF-8
+
+VERSION="1.0.0"
+
+# ---------- output helpers ----------
+if [[ -t 1 ]]; then
+  B=$'\e[1m' DIM=$'\e[2m' RED=$'\e[31m' GRN=$'\e[32m' YLW=$'\e[33m' R=$'\e[0m'
+else
+  B= DIM= RED= GRN= YLW= R=
+fi
+die()  { print -u2 -- "${RED}error:${R} $*"; exit 1 }
+warn() { print -u2 -- "${YLW}skip:${R}  $*" }
+
+usage() {
+  cat <<USAGE
+${B}rsn${R} — remove shitty naming  ${DIM}v$VERSION${R}
+
+Renames every file and folder below PATH to a clean, lowercase snake_case name.
+Shows a preview and asks before changing anything.
+
+${B}Usage${R}
+  rsn [options] <path>...
+  rsn -s "Some Messy Title (v2)"
+
+${B}Options${R}
+  -n, --dry-run     only show what would be renamed
+  -y, --yes         rename without asking
+  -r, --root        also rename the given folder itself
+  -s, --string      just print the cleaned version of a text
+  -h, --help        show this help
+  -V, --version     show the version
+
+${B}Examples${R}
+  rsn .                    clean up the current folder
+  rsn -n ~/Documents/Notes preview only
+  rsn -y "Übersicht.md"     
+
+Hidden files and folders (.git, .DS_Store, …) are never touched.
+Existing names are never overwritten — conflicts are skipped.
+USAGE
+}
+
+# ---------- the cleaning rules (keep in sync with lib/slugify.ts) ----------
+slugify() {
+  local s=$1
+  # macOS file names are often decomposed (u + ¨) → compose them first
+  s=$(print -rn -- "$s" | iconv -f UTF-8-MAC -t UTF-8 2>/dev/null) || s=$1
+  s=${s:l}
+  s=${s//ä/ae}; s=${s//ö/oe}; s=${s//ü/ue}; s=${s//ß/ss}
+  s=${s//æ/ae}; s=${s//ø/oe}; s=${s//å/aa}; s=${s//&/_and_}
+  # strip remaining accents (é → e)
+  s=$(print -rn -- "$s" | iconv -f UTF-8 -t UTF-8-MAC 2>/dev/null) || true
+  s=${s//[$'̀'-$'ͯ']/}
+  # everything else becomes a separator
+  s=${s//[^a-z0-9-]##/_}
+  # runs of "-" / "_": with an underscore → "_", only hyphens → "-"
+  s=${s//[-_]#_[-_]#/_}
+  s=${s//-(#c2,)/-}
+  s=${s##[_-]#}; s=${s%%[_-]#}
+  print -rn -- "$s"
+}
+
+# new name for a path (keeps file extensions, lowercased)
+clean_name() {
+  local p=$1 name=${1:t} base ext=""
+  if [[ ! -d $p && $name == ?*.[[:alnum:]](#c1,10) ]]; then
+    base=${name%.*}
+    ext=.${${name##*.}:l}
+  else
+    base=$name
+  fi
+  base=$(slugify "$base")
+  [[ -z $base ]] && return 1
+  print -rn -- "$base$ext"
+}
+
+# ---------- args ----------
+dry=0 yes=0 root=0 str=0
+paths=()
+while (( $# )); do
+  case $1 in
+    -n|--dry-run) dry=1 ;;
+    -y|--yes)     yes=1 ;;
+    -r|--root)    root=1 ;;
+    -s|--string)  str=1 ;;
+    -h|--help)    usage; exit 0 ;;
+    -V|--version) print -- "rsn $VERSION"; exit 0 ;;
+    --)           shift; paths+=("$@"); break ;;
+    -?*)          die "unknown option: $1 (see rsn --help)" ;;
+    *)            paths+=("$1") ;;
+  esac
+  shift
+done
+
+if (( str )); then
+  (( ${#paths} )) || die "nothing to clean — usage: rsn -s \"Some Title\""
+  slugify "${paths[*]}"; print
+  exit 0
+fi
+
+(( ${#paths} )) || { usage; exit 1 }
+
+# ---------- build the plan ----------
+# children before parents, so parent paths stay valid while renaming
+typeset -a from to
+for target in "${paths[@]}"; do
+  [[ -e $target || -L $target ]] || die "no such file or folder: $target"
+  target=${target:A}
+  [[ $target == / || $target == $HOME ]] && die "refusing to rename everything in $target"
+
+  items=()
+  [[ -d $target && ! -L $target ]] && items=($target/**/*(Nod))
+  (( root )) || [[ ! -d $target || -L $target ]] && items+=($target)
+
+  for p in "${items[@]}"; do
+    new=$(clean_name "$p") || { warn "${p:t} (nothing left after cleaning)"; continue }
+    [[ $new == ${p:t} ]] && continue
+    from+=("$p"); to+=("$new")
+  done
+done
+
+if (( ${#from} == 0 )); then
+  print -- "${GRN}✓${R} Everything is already clean."
+  exit 0
+fi
+
+# ---------- preview ----------
+lastdir=""
+for i in {1..${#from}}; do
+  dir=${from[i]:h}
+  if [[ $dir != $lastdir ]]; then
+    shown=${dir#$PWD/}; [[ $dir == $PWD ]] && shown="."
+    print -- "${B}${shown}/${R}"
+    lastdir=$dir
+  fi
+  print -- "  ${from[i]:t} ${DIM}→${R} ${GRN}${to[i]}${R}"
+done
+print
+
+(( dry )) && { print -- "${#from} item(s) would be renamed ${DIM}(dry run, nothing changed)${R}"; exit 0 }
+
+if (( ! yes )); then
+  [[ -t 0 ]] || die "not a terminal — use -y to rename without asking"
+  read -q "?Rename ${#from} item(s)? [y/N] " || { print; print -- "Aborted, nothing changed."; exit 1 }
+  print
+fi
+
+# ---------- rename ----------
+done_count=0 skipped=0
+for i in {1..${#from}}; do
+  src=${from[i]}
+  dest=${src:h}/${to[i]}
+  if [[ ${src:t:l} == ${to[i]:l} ]]; then
+    # case-only change: go through a temp name (APFS is case-insensitive)
+    tmp="$src.rsn-tmp-$$"
+    mv -- "$src" "$tmp" && mv -- "$tmp" "$dest" || { warn "${src:t} (rename failed)"; (( skipped++ )); continue }
+  elif [[ -e $dest || -L $dest ]]; then
+    warn "${src:t} → ${to[i]} (already exists)"; (( skipped++ )); continue
+  else
+    mv -- "$src" "$dest" || { warn "${src:t} (rename failed)"; (( skipped++ )); continue }
+  fi
+  (( done_count++ ))
+done
+
+print -- "${GRN}✓${R} Renamed $done_count item(s)${skipped:+$( (( skipped )) && print -n ", $skipped skipped")}."
