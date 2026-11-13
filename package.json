@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "prebuild": "cp cli/rsn cli/install.sh public/",
+    "prebuild": "mkdir -p public && cp cli/rsn cli/install.sh public/",
     "build": "next build",
     "start": "next start",
     "test": "node tests/run.ts"
