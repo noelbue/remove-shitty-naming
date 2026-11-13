@@ -1,8 +1,10 @@
 # remove-shitty-naming
 
+**Live:** https://remove-shitty-naming.netlify.app/
+
 Turns messy titles into clean, lowercase snake_case names. It comes in two forms:
 
-- **Web app:** paste a title and copy the clean name. Live, and nothing is stored.
+- **[Web app](https://remove-shitty-naming.netlify.app/):** paste a title and copy the clean name. Live, and nothing is stored.
 - **`rsn` CLI for macOS:** renames whole folders of files using the same rules.
 
 ```
