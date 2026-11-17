@@ -116,8 +116,15 @@ for target in "${paths[@]}"; do
   [[ $target == / || $target == $HOME ]] && die "refusing to rename everything in $target"
 
   items=()
-  [[ -d $target && ! -L $target ]] && items=($target/**/*(Nod))
+  [[ -d $target && ! -L $target ]] && items=($target/**/*(N))
   (( root )) || [[ ! -d $target || -L $target ]] && items+=($target)
+
+  # deepest paths first (zero-padded depth as sort key), so a folder is
+  # only renamed after everything inside it
+  keyed=()
+  for p in "${items[@]}"; do keyed+=("${(l:5::0:)${#${(s:/:)p}}}:$p"); done
+  items=()
+  for k in "${(@O)keyed}"; do items+=("${k#*:}"); done
 
   for p in "${items[@]}"; do
     new=$(clean_name "$p") || { warn "${p:t} (nothing left after cleaning)"; continue }
