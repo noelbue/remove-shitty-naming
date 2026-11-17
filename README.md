@@ -37,9 +37,11 @@ File extensions are kept and lowercased (`Report.PDF` → `report.pdf`).
 curl -fsSL https://remove-shitty-naming.netlify.app/install.sh | sh
 ```
 
-This installs `rsn` to `/usr/local/bin`, or to `~/.local/bin` if `/usr/local/bin` isn't writable. It's a single zsh script with no dependencies.
+This installs the latest [release](https://github.com/noelbue/remove-shitty-naming/releases) of `rsn` to `/usr/local/bin`, or to `~/.local/bin` if `/usr/local/bin` isn't writable. It's a single zsh script with no dependencies.
 
-To install it by hand, copy [`cli/rsn`](cli/rsn) somewhere on your `PATH` and `chmod +x` it.
+Run the same command again to update. Check your version with `rsn -V`.
+
+To install it by hand, download `rsn` from the [latest release](https://github.com/noelbue/remove-shitty-naming/releases/latest) somewhere on your `PATH` and `chmod +x` it.
 
 ### Usage
 
@@ -102,9 +104,20 @@ npm run build   # static export to ./out
 | `cli/rsn`         | The CLI (zsh), with the same rules            |
 | `cli/install.sh`  | Installer served at `/install.sh`             |
 | `tests/cases.tsv` | Shared test cases: `input<TAB>expected`       |
+| `tests/cli.sh`    | End-to-end test of `rsn` on a nested folder   |
+| `scripts/release.sh` | Release script, see below                  |
 
 The rules exist twice, in TypeScript and in zsh. If you change one, change the other and add a case to `tests/cases.tsv`.
 
+### Releases
+
+`rsn` is shipped through [GitHub releases](https://github.com/noelbue/remove-shitty-naming/releases), and the installer always fetches the latest one. Commits to `main` do not reach users until they're released.
+
+1. Add a `## x.y.z` section with the changes to [`CHANGELOG.md`](CHANGELOG.md) and commit it.
+2. Run `npm run release -- x.y.z`.
+
+The script checks that you're on a clean `main`, runs the tests, bumps the version in `cli/rsn` and `package.json`, commits, tags `vx.y.z`, pushes, and creates the GitHub release with `rsn` and `install.sh` attached.
+
 ### Deployment
 
-Netlify builds `main` automatically (see `netlify.toml`). `npm run build` copies `cli/rsn` and `cli/install.sh` into `public/`, so both are served from the site root.
+Netlify builds `main` automatically (see `netlify.toml`). `npm run build` copies `cli/install.sh` (and `cli/rsn`) into `public/`, so the installer is served at `/install.sh`.

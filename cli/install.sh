@@ -3,7 +3,8 @@
 #   curl -fsSL https://remove-shitty-naming.netlify.app/install.sh | sh
 set -e
 
-BASE_URL="${RSN_BASE_URL:-https://remove-shitty-naming.netlify.app}"
+# latest GitHub release (override with RSN_URL, e.g. to pin a version)
+RSN_URL="${RSN_URL:-https://github.com/noelbue/remove-shitty-naming/releases/latest/download/rsn}"
 
 if [ "$(uname)" != "Darwin" ]; then
   echo "rsn is made for macOS." >&2
@@ -17,9 +18,9 @@ else
   mkdir -p "$DIR"
 fi
 
-curl -fsSL "$BASE_URL/rsn" -o "$DIR/rsn"
+curl -fsSL "$RSN_URL" -o "$DIR/rsn"
 chmod +x "$DIR/rsn"
-echo "✓ Installed rsn to $DIR/rsn"
+echo "✓ Installed $("$DIR/rsn" -V) to $DIR/rsn"
 
 case ":$PATH:" in
   *":$DIR:"*) ;;
